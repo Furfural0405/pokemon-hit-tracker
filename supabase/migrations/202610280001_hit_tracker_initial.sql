@@ -289,33 +289,33 @@ using (user_id=(select auth.uid()) and (select app_private.is_approved()))
 with check (user_id=(select auth.uid()) and (select app_private.is_approved()));
 
 create policy app_displays_select on public.app_displays for select to authenticated
-using (exists(select 1 from public.app_openings o where o.id=opening_id and o.user_id=(select auth.uid())));
+using ((select app_private.is_approved()) and exists(select 1 from public.app_openings o where o.id=opening_id and o.user_id=(select auth.uid())));
 create policy app_displays_insert on public.app_displays for insert to authenticated
-with check (exists(select 1 from public.app_openings o where o.id=opening_id and o.user_id=(select auth.uid()) and o.status='active'));
+with check ((select app_private.is_approved()) and exists(select 1 from public.app_openings o where o.id=opening_id and o.user_id=(select auth.uid()) and o.status='active'));
 
 create policy app_groups_select on public.app_groups for select to authenticated
-using (exists(select 1 from public.app_openings o where o.id=opening_id and o.user_id=(select auth.uid())));
+using ((select app_private.is_approved()) and exists(select 1 from public.app_openings o where o.id=opening_id and o.user_id=(select auth.uid())));
 create policy app_groups_insert on public.app_groups for insert to authenticated
-with check (exists(select 1 from public.app_openings o where o.id=opening_id and o.user_id=(select auth.uid()) and o.status='active'));
+with check ((select app_private.is_approved()) and exists(select 1 from public.app_openings o where o.id=opening_id and o.user_id=(select auth.uid()) and o.status='active'));
 create policy app_groups_update on public.app_groups for update to authenticated
-using (exists(select 1 from public.app_openings o where o.id=opening_id and o.user_id=(select auth.uid()) and o.status='active'))
-with check (exists(select 1 from public.app_openings o where o.id=opening_id and o.user_id=(select auth.uid())));
+using ((select app_private.is_approved()) and exists(select 1 from public.app_openings o where o.id=opening_id and o.user_id=(select auth.uid()) and o.status='active'))
+with check ((select app_private.is_approved()) and exists(select 1 from public.app_openings o where o.id=opening_id and o.user_id=(select auth.uid())));
 
 create policy app_group_displays_select on public.app_group_displays for select to authenticated
-using (exists(select 1 from public.app_groups g join public.app_openings o on o.id=g.opening_id
+using ((select app_private.is_approved()) and exists(select 1 from public.app_groups g join public.app_openings o on o.id=g.opening_id
  where g.id=group_id and o.user_id=(select auth.uid())));
 create policy app_group_displays_insert on public.app_group_displays for insert to authenticated
-with check (exists(select 1 from public.app_groups g join public.app_openings o on o.id=g.opening_id
+with check ((select app_private.is_approved()) and exists(select 1 from public.app_groups g join public.app_openings o on o.id=g.opening_id
  where g.id=group_id and o.user_id=(select auth.uid()) and o.status='active'));
 
 create policy app_hit_events_select on public.app_hit_events for select to authenticated
-using (exists(select 1 from public.app_groups g join public.app_openings o on o.id=g.opening_id
+using ((select app_private.is_approved()) and exists(select 1 from public.app_groups g join public.app_openings o on o.id=g.opening_id
  where g.id=group_id and o.user_id=(select auth.uid())));
 create policy app_hit_events_insert on public.app_hit_events for insert to authenticated
-with check (exists(select 1 from public.app_groups g join public.app_openings o on o.id=g.opening_id
+with check ((select app_private.is_approved()) and exists(select 1 from public.app_groups g join public.app_openings o on o.id=g.opening_id
  where g.id=group_id and o.user_id=(select auth.uid()) and o.status='active'));
 create policy app_hit_events_delete on public.app_hit_events for delete to authenticated
-using (exists(select 1 from public.app_groups g join public.app_openings o on o.id=g.opening_id
+using ((select app_private.is_approved()) and exists(select 1 from public.app_groups g join public.app_openings o on o.id=g.opening_id
  where g.id=group_id and o.user_id=(select auth.uid()) and o.status='active'));
 
 -- Limit table access to the exact operations required by the client.
