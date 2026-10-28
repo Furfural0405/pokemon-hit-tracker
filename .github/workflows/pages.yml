@@ -25,8 +25,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Build website
         env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || 'https://entbtqtyxhbozjdbdvns.supabase.co' }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_51Kjy2GfK6fDkcB7QiG5Eg_NUsGhmh2' }}
           VITE_BASE_PATH: /pokemon-hit-tracker/
         run: npm run build
       - uses: actions/configure-pages@v5
