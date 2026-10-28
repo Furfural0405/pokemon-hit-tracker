@@ -4,7 +4,7 @@ Responsive React-/TypeScript-Web-App für Display-, Case- und Case-Case-Öffnung
 
 ## Sicherheits- und Projektstatus
 
-**Quellcode im GitHub-Repository eingerichtet; noch nicht live bereitgestellt.** Für diese Version muss **ein neues, separates Supabase-Projekt** erstellt und die Datenbankmigration ausgeführt werden. Das bestehende Projekt `pokemon-pullrates` darf **nicht** durch die Migration überschrieben werden.
+**Datenbank eingerichtet, Website noch nicht produktiv freigegeben.** Das separate Supabase-Projekt `pokemon-hit-tracker` (`entbtqtyxhbozjdbdvns`, EU West) wurde erstellt. Die beiden Datenbankmigrationen wurden eingespielt; alle sieben Anwendungstabellen haben RLS. Das bestehende Projekt `pokemon-pullrates` blieb unverändert. `Feelings-Turnier` wurde auf ausdrückliche Freigabe pausiert.
 
 ## Funktionen
 
@@ -16,10 +16,10 @@ Responsive React-/TypeScript-Web-App für Display-, Case- und Case-Case-Öffnung
 - Statistik: Zusatzhits, fertige Displays, Vergleich Einzeln/Gemischt, Detailübersicht der Öffnungen. Nur vollständig abgeschlossene und mit allen garantierten Hits protokollierte Abschnitte zählen in den Nenner der Hit-Rate.
 - Registrieren, E-Mail bestätigen, warten auf manuelle Freigabe. Admin kann freigeben, ablehnen oder sperren. RLS trennt private Nutzerdaten.
 
-## Einrichtung (neues Supabase-Projekt)
+## Datenbank- und Auth-Einrichtung
 
-1. Ein **eigenes neues** Supabase-Projekt erstellen; Region möglichst in Europa wählen. Etwaige Kosten vor Bestätigung prüfen.
-2. Unter **SQL Editor** die Datei `supabase/migrations/202610280001_hit_tracker_initial.sql` genau einmal ausführen (auf einem leeren Projekt). Alternativ per Supabase CLI als Migration anwenden.
+1. Supabase-Projekt **`pokemon-hit-tracker`** ist bereits erstellt: https://supabase.com/dashboard/project/entbtqtyxhbozjdbdvns.
+2. Die Migrationen `supabase/migrations/20261028215243_hit_tracker_initial.sql` und `supabase/migrations/20261028215319_index_openings_set_slug.sql` sind **bereits angewendet**. Nicht erneut über den SQL-Editor ausführen.
 3. Unter **Authentication → Providers → Email** E-Mail-Bestätigung aktivieren und eine geeignete SMTP-Konfiguration für Einladungs- und Bestätigungsmails einrichten. Der Status `approved` ist **zusätzlich** zur E-Mail-Bestätigung erforderlich.
 4. **Admin einmalig initialisieren:** Melde dich zunächst selbst über die Webseite an und bestätige deine E-Mail. Sobald `app_profiles` deinen Benutzer enthält, im Supabase-SQL-Editor ausführen (E-Mail anpassen):
 
@@ -48,7 +48,7 @@ Frontend auf `http://localhost:5173` öffnen. **Nicht** mit echten Nutzerkonten 
 1. Das Repository ist bereits eingerichtet: https://github.com/Furfural0405/pokemon-hit-tracker (öffentlich).
 2. Die Projektdateien befinden sich im Repository. Vor einem verlässlichen Produktionsrelease eine `package-lock.json` mit `npm install` erzeugen und committen – **ohne `.env`**.
 3. Vite-Basis für GitHub Pages: `VITE_BASE_PATH=/pokemon-hit-tracker/` (siehe `.env.example`). Bei anderer Domain oder Repository-Benennung anpassen.
-4. Das Workflow-Grundgerüst `.github/workflows/pages.yml` liegt bei. Vor dem ersten Deploy unter **Settings → Secrets and variables → Actions → Variables** `VITE_SUPABASE_URL` und `VITE_SUPABASE_PUBLISHABLE_KEY` eintragen (beide sind öffentlich verwendbare Clientwerte). Niemals Secret-Key eintragen. Unter **Settings → Pages** die Quelle **GitHub Actions** auswählen. Der Build und die Veröffentlichung starten beim Push auf `main`.
+4. `.github/workflows/pages.yml` ist bereits mit der Projekt-URL und dem **öffentlichen** Supabase-Publishable-Key verbunden. GitHub-Actions-Variablen `VITE_SUPABASE_URL` und `VITE_SUPABASE_PUBLISHABLE_KEY` können bei Bedarf diese öffentlichen Fallbackwerte überschreiben (z. B. nach Schlüsselrotation). **Niemals Secret- oder Service-Role-Key veröffentlichen.** Unter **Settings → Pages** die Quelle **GitHub Actions** auswählen. Der Build und die Veröffentlichung starten beim Push auf `main`.
 5. `npm install` in einer Umgebung mit Zugang zur npm-Registry ausführen und die entstehende **package-lock.json** committen; danach ist für Produktions-Builds `npm ci` vorzuziehen. Dieser Paketstand konnte offline nicht vollständig installiert werden und muss vor Produktivstart geprüft werden.
 6. GitHub Pages kann das Frontend hosten, während Supabase Auth/DB bereitstellt.
 
@@ -66,8 +66,7 @@ Alle öffentlichen Tabellen nutzen Row-Level Security. Im Browser nur der Publis
 
 ## Noch offene Schritte vor Produktivbetrieb
 
-- Das GitHub-Repository ist erstellt; das separate Supabase-Projekt muss noch angelegt werden (Kostenfreigabe ausstehend).
-- Migration im **neuen** Projekt anwenden, Verbindung konfigurieren und die Auth-Einstellungen prüfen.
+- Projekt und Migrationen sind eingerichtet. E-Mail-Bestätigung, Mailversand, Auth-Redirect-URLs und die erste Administratorfreigabe müssen noch geprüft/eingerichtet werden.
 - E-Mail-Zustellung sowie Admin-Bootstrap testen.
 - Komplette Integrationstests mit zwei Konten: `pending` vs. `approved`, Fremdzugriff, parallele Counter-Updates, Registrierung, Sperrung, Case-Case-Grenzen.
 - GitHub Pages bereitstellen und End-to-End-Test auf der echten Domain durchführen.
@@ -81,4 +80,4 @@ Case-übergreifende Mischung wird dem Gesamtvorgang, **nicht** willkürlich eine
 E-Mail-Adressen der Registrierenden sind nur dem jeweiligen Benutzer und Admin sichtbar. Es gibt kein eingebautes Tracking oder Drittanbieter-Analytics. Beachte bei öffentlicher Verwendung eigene Impressums-/Datenschutzhinweispflichten und eine passende Datenschutzerklärung.
 ## Stand 28.10.2026
 
-Die GitHub-Dateien wurden durch ChatGPT direkt hochgeladen und auf GitHub verifiziert. Die neue React-/TypeScript-Anwendung wurde noch nicht vollständig mit npm gebaut oder End-to-End getestet. Der Supabase-Projekt-Neuanlage wird von der API eine Kostenbestätigung abverlangt (Abfrage: 0 USD/Monat); bis zur Bestätigung wurde keine bestehende Datenbank verändert. GitHub Pages ist noch nicht konfiguriert bzw. live bestätigt.
+Die GitHub-Dateien wurden durch ChatGPT direkt hochgeladen und auf GitHub verifiziert. Die neue React-/TypeScript-Anwendung wurde noch nicht vollständig mit npm gebaut oder End-to-End getestet. Das separate Supabase-Projekt wurde nach ausdrücklicher Kosten- und Pausierungsfreigabe erstellt und mit den SQL-Migrationen eingerichtet; die Sicherheitsprüfung meldet keine Warnungen. GitHub Pages ist noch nicht live bestätigt.
