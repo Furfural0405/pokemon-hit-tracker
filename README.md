@@ -53,6 +53,22 @@ Frontend auf `http://localhost:5173` öffnen. **Nicht** mit echten Nutzerkonten 
 6. GitHub Pages kann das Frontend hosten, während Supabase Auth/DB bereitstellt.
 
 
+## Gastmodus ohne Anmeldung (externe Eskalationen)
+
+Die Startseite für nicht eingeloggte Besucher zeigt oben zwei gleichberechtigte Auswahlfelder:
+**„Aktuelle Eskalation ansehen“** (bestehende öffentliche Live-Ziehungen des Besitzers) und
+**„Eigene Eskalation anlegen“** (Gast-Zähler ohne Benutzerkonto).
+
+- Gäste können Displays, Cases und Case-Cases anlegen, noch ungeöffnete Displays einzelnen oder gemischten Pools zuweisen, SAR/Classics/AR/FUR/RGB zählen, 20 Booster pro Display nachhalten, individuelle Restquoten sehen und Abschnitte manuell abschließen.
+- Während der Erfassung bleiben die Werte **lokal im Browser** (`localStorage`). Sie werden nicht mit einem Nutzerkonto oder anderen Geräten synchronisiert und lassen sich lokal löschen.
+- Beim Abschluss einer gesamten Öffnung wird diese über die streng validierte, nur für `anon` freigegebene RPC `app_submit_guest_opening` eingereicht. Bei temporärem Fehler ist eine erneute Einreichung möglich. Eine UUID verhindert doppelte Speicherung.
+- Der Server prüft Set, Verpackung, Displaynummern (einmalig, völlig ungeöffnet), garantierte Hit-Grenzen und offene Booster. Die Einreichung erhält **ausschließlich** den Status `pending` und die Quelle `external`; Gäste haben keinerlei Tabellen-Lese-/Schreibberechtigungen für Einreichungen oder private Öffnungen.
+- In der Gesamtstatistik werden externe Freigaben separat mitgezählt; **ungeprüfte** Einreichungen erscheinen für Administratoren gesondert als **„Extern eingereicht · unter Vorbehalt“** und werden nicht in persönliche, verifizierte Quoten gemischt.
+- Administratoren können unter **Administration → Externe Einreichungen prüfen** genehmigen oder ablehnen. Vor einer Freigabe sind die Angaben nicht unabhängig verifiziert.
+- Gastzählungen können nach Einreichung nicht mehr direkt verändert werden; das Löschen der lokalen Kopie entfernt keine bereits gespeicherten Servereinreichungen.
+- Der Gastmodus bietet keine eigene öffentliche Live-Freigabe. Die öffentliche Live-Anzeige bleibt weiterhin eine Funktion angemeldeter, freigegebener Konten.
+- Der anonyme Einreichungsendpunkt begrenzt Nutzlasten, prüft Grenzen und besitzt ein globales Limit offener Einreichungen. Für großen öffentlichen Betrieb ist zusätzliche Missbrauchsabwehr (z. B. CAPTCHA/Rate-Limits pro Client) empfehlenswert.
+
 ## Öffentliche Live-Ziehungen (optional)
 
 Ab der Migration `20261029070552_live_view_and_booster_progress.sql` gibt es pro laufender Öffnung die optionale Einstellung **„Öffentlich live anzeigen“**.
