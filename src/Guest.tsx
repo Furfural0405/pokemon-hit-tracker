@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { supabase } from './client';
 import LiveBoard from './Live';
 import type { Category, Opening, Rule } from './model';
@@ -206,7 +206,7 @@ function GuestTracker(){
   </>}
  </div>;
 }
-export default function GuestPortal(){
+export default function GuestPortal({loginForm}:{loginForm:ReactNode}){
  const [mode,setMode]=useState<'watch'|'guest'>('watch');
  const [login,setLogin]=useState(false);
  return <div className="guest-portal">
@@ -219,7 +219,7 @@ export default function GuestPortal(){
   {mode==='watch'?<LiveBoard/>:<GuestTracker/>}
   <div className="guest-login-link"><button className="textbutton" onClick={()=>setLogin(!login)}>
    {login?'Anmeldung ausblenden':'Bereits registriert? Anmelden oder registrieren'}</button>
-   {login&&<div id="guest-account-form" data-login-placeholder="true"/>}
+   {login&&loginForm}
   </div>
  </div>;
 }
