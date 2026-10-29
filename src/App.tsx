@@ -1,9 +1,10 @@
 import {useCallback,useEffect,useState,type FormEvent,type ReactNode} from 'react';
 import {supabase,configured} from './client';
+import LiveBoard from './Live';
 import type {Session} from '@supabase/supabase-js';
 import {categories,complete,displayLabel,hits,names,target,units,type Category,type Detail,type Display,type Group,type Hit,type Opening,type Profile,type Rule} from './model';
 
-type Page='openings'|'stats'|'admin';
+type Page='openings'|'stats'|'admin'|'live';
 const fmt=(s:string)=>new Date(s).toLocaleString('de-DE',{dateStyle:'medium',timeStyle:'short'});
 const err=(e:unknown)=>e instanceof Error?e.message:String(e);
 const confirmationRedirectTo=new URL(import.meta.env.BASE_URL,window.location.origin).toString();
@@ -30,10 +31,67 @@ function Signin({notify}:{notify:(s:string)=>void}){
  async function resend(){if(!email.trim())return;setBusy(true);try{const r=await supabase.auth.resend({type:'signup',email:email.trim(),options:{emailRedirectTo:confirmationRedirectTo}});if(r.error)throw r.error;notify('Bestätigungsmail erneut angefordert. Bitte auch Spam prüfen.');}catch(e){notify(err(e))}finally{setBusy(false)}}
  return <div className="center"><div className="logo">✦</div><h1>Pokémon Hit Tracker</h1><p className="muted">Displays öffnen. Zusatzhits erfassen. Statistiken vergleichen.</p><Card><div className="switch"><button className={!register?'chosen':''} onClick={()=>setRegister(false)}>Anmelden</button><button className={register?'chosen':''} onClick={()=>setRegister(true)}>Registrieren</button></div><form className="stack" onSubmit={submit}><label>E-Mail<input type="email" required autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Passwort<input type="password" minLength={6} required autoComplete={register?'new-password':'current-password'} value={password} onChange={e=>setPassword(e.target.value)}/></label><button className="primary" disabled={busy}>{busy?'Einen Moment …':register?'Registrierung beantragen':'Anmelden'}</button></form>{register&&<div className="stack"><button type="button" className="secondary" disabled={busy||!email.includes('@')} onClick={resend}>Bestätigungsmail erneut senden</button><p className="subtle">Erst nach Bestätigung deiner E-Mail und Freigabe durch den Administrator kannst du Öffnungen erfassen. Du musst dich nicht erneut registrieren.</p></div>}</Card></div>
 }
+
+function BoosterProgress({data,group,run,busy}:{data:Detail;group:Group;run:(fn:()=>Promise<void>)=>Promise<void>;busy:boolean}) {
+ const [draft,setDraft]=useState(String(group.opened_boosters));
+ useEffect(()=>setDraft(String(group.opened_boosters)),[group.id,group.opened_boosters]);
+ const count=data.memberships.filter(m=>m.group_id===group.id).length;
+ const limit=count*20,remaining=limit-group.opened_boosters;
+ const items=data.hits.filter(h=>h.group_id===group.id);
+ async function save(value:number){
+  if(group.status!=='active'||busy||!Number.isInteger(value)||value<0||value>limit){setDraft(String(group.opened_boosters));return;}
+  if(value===group.opened_boosters)return;
+  setDraft(String(value));
+  await run(async()=>{const r=await supabase.from('app_groups').update({opened_boosters:value}).eq('id',group.id);if(r.error)throw r.error;});
+ }
+ return <div className="booster-progress stack">
+  <div className="between"><h3>Booster-Fortschritt</h3><strong>{group.opened_boosters} / {limit}</strong></div>
+  <progress className="live-progress" value={group.opened_boosters} max={Math.max(1,limit)}/>
+  {group.status==='active'&&<div className="booster-edit">
+   <button disabled={busy||group.opened_boosters===0} onClick={()=>void save(group.opened_boosters-1)} aria-label="Einen Booster weniger">−</button>
+   <label>Geöffnete Booster<input type="number" min={0} max={limit} step={1} value={draft} onChange={e=>setDraft(e.target.value)}
+    onBlur={()=>{if(draft!=='')void save(Number(draft));else setDraft(String(group.opened_boosters))}}
+    onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}} disabled={busy}/></label>
+   <button disabled={busy||group.opened_boosters>=limit} onClick={()=>void save(group.opened_boosters+1)} aria-label="Einen Booster mehr">+</button>
+  </div>}
+  {group.mode==='mixed'&&<><h3>Rest-Hitraten pro Kategorie</h3>
+   <div className="rategrid">{(['sar','classics','ar'] as const).map(c=>{
+    const guaranteed=target(data.opening.rules,count,c)??0;
+    const drawn=hits(items,c),normal=count?guaranteed/limit*100:0;
+    const current=remaining>0?Math.max(0,guaranteed-drawn)/remaining*100:null;
+    const color=current===null?'':current>normal+1e-8?'rate-high':current<normal-1e-8?'rate-low':'';
+    return <div className="ratebox" key={c}><span>{names[c]}</span>
+     <strong className={color}>{current===null?'–':current.toLocaleString('de-DE',{maximumFractionDigits:1})+' %'}</strong>
+     <small>Normal: {normal.toLocaleString('de-DE',{maximumFractionDigits:1})} %</small>
+    </div>
+   })}</div><p className="subtle">Rechnerische Restquoten aus garantierten Hits und verbleibenden Boostern. FUR/RGB zählen nicht dazu.</p></>}
+ </div>;
+}
+function LiveSharing({opening,run,busy}:{opening:Opening;run:(fn:()=>Promise<void>)=>Promise<void>;busy:boolean}){
+ const [shareLink,setShareLink]=useState('');
+ useEffect(()=>{
+  let active=true;
+  if(!opening.is_live_public){setShareLink('');return;}
+  void supabase.from('app_live_feed').select('public_id').eq('opening_id',opening.id).maybeSingle().then(({data})=>{
+   if(active&&data){const u=new URL(import.meta.env.BASE_URL,window.location.origin);u.searchParams.set('watch',data.public_id);setShareLink(u.toString());}
+  });
+  return()=>{active=false};
+ },[opening.id,opening.is_live_public]);
+ return <Card><div className="between"><div><h3>Öffentliche Live-Ansicht</h3>
+  <p className="muted">Nur bei ausdrücklicher Freigabe sichtbar. Zuschauer können keine Werte bearbeiten.</p></div>
+  <Flag>{opening.is_live_public?'Öffentlich':'Privat'}</Flag></div>
+  <button className="secondary" disabled={busy} onClick={()=>{
+   if(opening.is_live_public&&!window.confirm('Öffentliche Übertragung beenden?'))return;
+   void run(async()=>{const r=await supabase.from('app_openings').update({is_live_public:!opening.is_live_public}).eq('id',opening.id);if(r.error)throw r.error;});
+  }}>{opening.is_live_public?'Live-Ansicht deaktivieren':'Öffentlich live anzeigen'}</button>
+  {shareLink&&<label className="share-box">Link für Zuschauer<input readOnly value={shareLink} onFocus={e=>e.currentTarget.select()}/></label>}
+  <p className="subtle">Öffentlich sind die Bezeichnung, Set-Information, Boosterzahlen und Hit-Zähler. Keine E-Mail-Adresse oder Kontodaten. Nach Abschluss wird die Freigabe beendet.</p>
+ </Card>;
+}
 function Counters({data,group,run,busy}:{data:Detail;group:Group;run:(task:()=>Promise<void>)=>Promise<void>;busy:boolean}){
  const members=data.memberships.filter(m=>m.group_id===group.id),items=data.hits.filter(h=>h.group_id===group.id);
  async function change(c:Category,plus:boolean){await run(async()=>{if(plus){const r=await supabase.from('app_hit_events').insert({group_id:group.id,category:c});if(r.error)throw r.error;}else{const old=items.filter(h=>h.category===c).at(-1);if(old){const r=await supabase.from('app_hit_events').delete().eq('id',old.id);if(r.error)throw r.error;}}})}
- return <Card><div className="between"><div><h3>{group.mode==='mixed'?'Gemischter Boosterpool':'Einzelöffnung'}</h3><p className="muted">{members.length} Display(s) · {group.status==='active'?'Aktiv':'Abgeschlossen'}</p></div><Flag>{group.mode==='mixed'?'Gemischt':'Einzeln'}</Flag></div><p className="subtle">{data.displays.filter(d=>members.some(m=>m.display_id===d.id)).map(displayLabel).join(' · ')}</p><div className="countergrid">{categories.map(c=>{const count=hits(items,c),max=target(data.opening.rules,members.length,c);return <div className="counter" key={c}><span>{names[c]}</span><strong>{count}{max!==null&&<small> / {max}</small>}</strong>{group.status==='active'&&<div className="pair"><button disabled={busy||count===0} onClick={()=>change(c,false)} aria-label={names[c]+' reduzieren'}>−</button><button disabled={busy||(max!==null&&count>=max)} onClick={()=>change(c,true)} aria-label={names[c]+' erhöhen'}>+</button></div>}</div>})}</div>{group.status==='active'&&<button className="secondary" disabled={busy} onClick={()=>{if(window.confirm('Abschnitt abschließen? Danach sind seine Zähler gesperrt.'))void run(async()=>{const r=await supabase.from('app_groups').update({status:'closed'}).eq('id',group.id);if(r.error)throw r.error})}}>Abschnitt manuell abschließen</button>}</Card>;
+ return <Card><div className="between"><div><h3>{group.mode==='mixed'?'Gemischter Boosterpool':'Einzelöffnung'}</h3><p className="muted">{members.length} Display(s) · {group.status==='active'?'Aktiv':'Abgeschlossen'}</p></div><Flag>{group.mode==='mixed'?'Gemischt':'Einzeln'}</Flag></div><p className="subtle">{data.displays.filter(d=>members.some(m=>m.display_id===d.id)).map(displayLabel).join(' · ')}</p><div className="countergrid">{categories.map(c=>{const count=hits(items,c),max=target(data.opening.rules,members.length,c);return <div className="counter" key={c}><span>{names[c]}</span><strong>{count}{max!==null&&<small> / {max}</small>}</strong>{group.status==='active'&&<div className="pair"><button disabled={busy||count===0} onClick={()=>change(c,false)} aria-label={names[c]+' reduzieren'}>−</button><button disabled={busy||(max!==null&&count>=max)} onClick={()=>change(c,true)} aria-label={names[c]+' erhöhen'}>+</button></div>}</div>})}</div><BoosterProgress data={data} group={group} run={run} busy={busy}/>{group.status==='active'&&<button className="secondary" disabled={busy} onClick={()=>{if(window.confirm('Abschnitt abschließen? Danach sind seine Zähler gesperrt.'))void run(async()=>{const r=await supabase.from('app_groups').update({status:'closed'}).eq('id',group.id);if(r.error)throw r.error})}}>Abschnitt manuell abschließen</button>}</Card>;
 }
 function DetailPage({data,run,busy,back}:{data:Detail;run:(fn:()=>Promise<void>)=>Promise<void>;busy:boolean;back:()=>void}){
  const [mode,setMode]=useState<'single'|'mixed'>('single'),[selected,setSelected]=useState<string[]>([]);
@@ -43,10 +101,12 @@ function DetailPage({data,run,busy,back}:{data:Detail;run:(fn:()=>Promise<void>)
  const toggle=(id:string)=>setSelected(old=>mode==='single'?[id]:old.includes(id)?old.filter(x=>x!==id):[...old,id]);
  async function start(){await run(async()=>{const r=await supabase.rpc('app_start_group',{p_opening_id:opening.id,p_mode:mode,p_display_ids:selected});if(r.error)throw r.error;setSelected([])})}
  async function finish(){if(!window.confirm('Gesamte Öffnung abschließen? Nicht geöffnete Displays bleiben unvollständig dokumentiert.'))return;await run(async()=>{const r=await supabase.from('app_openings').update({status:'closed'}).eq('id',opening.id);if(r.error)throw r.error})}
- return <div className="stack"><button className="textbutton" onClick={back}>← Alle Öffnungen</button><div className="between"><div><h2>{opening.label||units[opening.kind]}</h2><p className="muted">{units[opening.kind]} · {displays.length} Displays · {fmt(opening.created_at)}</p></div><Flag>{closed?'Abgeschlossen':'Laufend'}</Flag></div>{active&&<Counters data={data} group={active} run={run} busy={busy}/>}
+ async function remove(){if(window.prompt('Gesamte Öffnung samt Hits endgültig löschen? Tippe LÖSCHEN:')!=='LÖSCHEN')return;await run(async()=>{const r=await supabase.from('app_openings').delete().eq('id',opening.id);if(r.error)throw r.error;back();})}
+ return <div className="stack"><button className="textbutton" onClick={back}>← Alle Öffnungen</button><div className="between"><div><h2>{opening.label||units[opening.kind]}</h2><p className="muted">{units[opening.kind]} · {displays.length} Displays · {fmt(opening.created_at)}</p></div><Flag>{closed?'Abgeschlossen':'Laufend'}</Flag></div>{!closed&&<LiveSharing opening={opening} run={run} busy={busy}/>} {active&&<Counters data={data} group={active} run={run} busy={busy}/>}
  {!active&&!closed&&available.length>0&&<Card><h3>Nächsten Abschnitt starten</h3><p className="muted">Nur bislang ungeöffnete Displays können gemischt werden. Ein begonnenes Display bleibt einem Abschnitt zugeordnet.</p><div className="switch"><button className={mode==='single'?'chosen':''} onClick={()=>{setMode('single');setSelected([])}}>Einzeln</button><button className={mode==='mixed'?'chosen':''} onClick={()=>{setMode('mixed');setSelected([])}}>Booster mischen</button></div><div className="displaygrid">{available.map(d=><button key={d.id} className={selected.includes(d.id)?'display selected':'display'} onClick={()=>toggle(d.id)}>{displayLabel(d)}</button>)}</div><p className="subtle">{selected.length} von {available.length} verfügbaren Displays gewählt</p><button className="primary" disabled={busy||(mode==='single'?selected.length!==1:selected.length<2)} onClick={start}>Abschnitt starten</button></Card>}
  {!active&&!closed&&<Card><h3>Gesamte Öffnung abschließen</h3><p className="muted">Auch nach den garantierten Hits können Bonus-Hits erfasst werden. Erst nach dem manuellen Abschluss endet die Erfassung.</p><button className="secondary" disabled={busy} onClick={finish}>Öffnung abschließen</button></Card>}
  {groups.filter(g=>g.status==='closed').length>0&&<div className="stack"><h3>Abgeschlossene Abschnitte</h3>{groups.filter(g=>g.status==='closed').map(g=><Counters key={g.id} group={g} data={data} run={run} busy={busy}/>)}</div>}
+ <Card><h3>Öffnung löschen</h3><p className="muted">Löscht diese Öffnung und alle zugehörigen Pullstatistiken dauerhaft.</p><button className="secondary" disabled={busy} onClick={()=>void remove()}>Öffnung endgültig löschen</button></Card>
  </div>;
 }
 function Stats({openings,version}:{openings:Opening[];version:number}){
@@ -71,9 +131,9 @@ function Tracker({profile}:{profile:Profile}){
  useEffect(()=>{let active=true;if(!selected){setDetail(null);return;}getDetail(selected).then(d=>{if(active)setDetail(d)}).catch(e=>{if(active)setError(err(e))});return()=>{active=false}},[selected,version]);
  async function run(fn:()=>Promise<void>){setBusy(true);setError('');try{await fn();reload()}catch(e){setError(err(e))}finally{setBusy(false)}}
  async function create(){await run(async()=>{const r=await supabase.rpc('app_create_opening',{p_set_slug:setSlug,p_kind:kind,p_label:label});if(r.error)throw r.error;setSelected(r.data as string);setLabel('')})}
- return <div className="shell"><aside><div className="identity"><span className="logo">✦</span><strong>POKÉMON <small>HIT TRACKER</small></strong></div><nav><button className={page==='openings'?'navactive':''} onClick={()=>{setPage('openings');setSelected(null)}}>▤ Öffnung</button><button className={page==='stats'?'navactive':''} onClick={()=>{setPage('stats');setSelected(null)}}>▥ Statistik</button>{profile.role==='admin'&&<button className={page==='admin'?'navactive':''} onClick={()=>{setPage('admin');setSelected(null)}}>⚙ Administration</button>}</nav><div className="account"><p>{profile.email}</p><button onClick={()=>supabase.auth.signOut()}>Abmelden</button></div></aside><main><header className="between"><div><span className="eyebrow">30. Jubiläum · Simplified Chinese</span><h1>{page==='openings'?'Deine Öffnungen':page==='stats'?'Statistik':'Administration'}</h1></div><button onClick={reload}>↻ Aktualisieren</button></header>{error&&<div className="alert">{error}<button onClick={()=>setError('')}>×</button></div>}
+ return <div className="shell"><aside><div className="identity"><span className="logo">✦</span><strong>POKÉMON <small>HIT TRACKER</small></strong></div><nav><button className={page==='openings'?'navactive':''} onClick={()=>{setPage('openings');setSelected(null)}}>▤ Öffnung</button><button className={page==='stats'?'navactive':''} onClick={()=>{setPage('stats');setSelected(null)}}>▥ Statistik</button><button className={page==='live'?'navactive':''} onClick={()=>{setPage('live');setSelected(null)}}>◉ Live ansehen</button>{profile.role==='admin'&&<button className={page==='admin'?'navactive':''} onClick={()=>{setPage('admin');setSelected(null)}}>⚙ Administration</button>}</nav><div className="account"><p>{profile.email}</p><button onClick={()=>supabase.auth.signOut()}>Abmelden</button></div></aside><main><header className="between"><div><span className="eyebrow">30. Jubiläum · Simplified Chinese</span><h1>{page==='openings'?'Deine Öffnungen':page==='stats'?'Statistik':page==='live'?'Live-Ziehungen':'Administration'}</h1></div><button onClick={reload}>↻ Aktualisieren</button></header>{error&&<div className="alert">{error}<button onClick={()=>setError('')}>×</button></div>}
  {page==='openings'&&(selected?(detail?<DetailPage data={detail} busy={busy} run={run} back={()=>setSelected(null)}/>:<Card>Öffnung wird geladen …</Card>):<div className="stack"><div className="hero"><h2>Alles im Blick, jeder Hit zählt.</h2><p>Deine Displays, Cases und Zusatzhits – übersichtlich an einem Ort.</p></div><Card><h3>Neue Öffnung</h3><div className="forms"><label>Pokémon-Set<select value={setSlug} onChange={e=>setSetSlug(e.target.value)}>{sets.map(s=><option key={s.slug} value={s.slug}>{s.title}</option>)}</select></label><label>Verpackung<select value={kind} onChange={e=>setKind(e.target.value as Opening['kind'])}><option value="display">Display</option><option value="case">Case · 12 Displays</option><option value="case_case">Case-Case · 72 Displays</option></select></label><label>Bezeichnung<input maxLength={120} value={label} onChange={e=>setLabel(e.target.value)} placeholder="Optionaler Name"/></label></div><button className="primary" disabled={busy||!setSlug} onClick={create}>+ Neue Öffnung</button></Card><h2>Öffnungshistorie</h2>{openings.length===0?<Card>Noch keine Öffnungen vorhanden.</Card>:openings.map(o=><button key={o.id} className="history" onClick={()=>setSelected(o.id)}><strong>{o.label||units[o.kind]}</strong><span>{units[o.kind]} · {fmt(o.created_at)}</span><Flag>{o.status==='closed'?'Abgeschlossen':'Laufend'}</Flag></button>)}</div>)}
- {page==='stats'&&<Stats openings={openings} version={version}/>}
+ {page==='stats'&&<Stats openings={openings} version={version}/>} {page==='live'&&<LiveBoard/>}
  {page==='admin'&&profile.role==='admin'&&<Admin version={version} run={run}/>}
  </main></div>;
 }
@@ -82,5 +142,6 @@ export default function App(){
  const refresh=useCallback(async(s:Session|null)=>{if(!s){setProfile(null);setReady(true);return;}const r=await supabase.from('app_profiles').select('*').eq('id',s.user.id).maybeSingle();if(r.error)setMessage(r.error.message);setProfile(r.data as Profile|null);setReady(true)},[]);
  useEffect(()=>{let mounted=true;supabase.auth.getSession().then(({data})=>{if(mounted){setSession(data.session);void refresh(data.session)}});const {data}=supabase.auth.onAuthStateChange((_evt,s)=>{if(mounted){setSession(s);setTimeout(()=>{if(mounted)void refresh(s)},0)}});return()=>{mounted=false;data.subscription.unsubscribe()}},[refresh]);
  if(!configured)return <div className="center"><h1>Einrichtung erforderlich</h1><Card>Supabase-Projekt-URL und Publishable Key fehlen. Sie werden über die GitHub Actions Variablen bereitgestellt.</Card></div>;
- return <>{message&&<div className="toast">{message}<button onClick={()=>setMessage('')}>×</button></div>}{!ready?<div className="center">Lade Pokémon Hit Tracker …</div>:!session?<Signin notify={setMessage}/>:!profile?<div className="center"><Card>Benutzerprofil wird angelegt. <button onClick={()=>refresh(session)}>Erneut prüfen</button></Card></div>:profile.status!=='approved'?<div className="center"><div className="logo">✦</div><h1>Zugang noch nicht freigegeben</h1><Card><p>Status: <Flag>{profile.status}</Flag></p><p>Nach E-Mail-Bestätigung wird dein Konto durch den Administrator manuell freigegeben.</p><div className="actions"><button onClick={()=>refresh(session)}>Status aktualisieren</button><button onClick={()=>supabase.auth.signOut()}>Abmelden</button></div></Card></div>:<Tracker profile={profile}/>}</>;
+ if(new URLSearchParams(window.location.search).has('watch'))return <LiveBoard/>;
+ return <>{message&&<div className="toast">{message}<button onClick={()=>setMessage('')}>×</button></div>}{!ready?<div className="center">Lade Pokémon Hit Tracker …</div>:!session?<><Signin notify={setMessage}/><LiveBoard/></>:!profile?<div className="center"><Card>Benutzerprofil wird angelegt. <button onClick={()=>refresh(session)}>Erneut prüfen</button></Card></div>:profile.status!=='approved'?<div className="center"><div className="logo">✦</div><h1>Zugang noch nicht freigegeben</h1><Card><p>Status: <Flag>{profile.status}</Flag></p><p>Nach E-Mail-Bestätigung wird dein Konto durch den Administrator manuell freigegeben.</p><div className="actions"><button onClick={()=>refresh(session)}>Status aktualisieren</button><button onClick={()=>supabase.auth.signOut()}>Abmelden</button></div></Card></div>:<Tracker profile={profile}/>}</>;
 }
