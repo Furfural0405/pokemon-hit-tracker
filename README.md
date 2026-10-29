@@ -52,6 +52,21 @@ Frontend auf `http://localhost:5173` öffnen. **Nicht** mit echten Nutzerkonten 
 5. `npm install` in einer Umgebung mit Zugang zur npm-Registry ausführen und die entstehende **package-lock.json** committen; danach ist für Produktions-Builds `npm ci` vorzuziehen. Dieser Paketstand konnte offline nicht vollständig installiert werden und muss vor Produktivstart geprüft werden.
 6. GitHub Pages kann das Frontend hosten, während Supabase Auth/DB bereitstellt.
 
+
+## Öffentliche Live-Ziehungen (optional)
+
+Ab der Migration `20261029070552_live_view_and_booster_progress.sql` gibt es pro laufender Öffnung die optionale Einstellung **„Öffentlich live anzeigen“**.
+
+- **Standard: privat**. Ohne ausdrückliche Freigabe wird nichts öffentlich angezeigt.
+- Die Besitzerin oder der Besitzer kann die Freigabe jederzeit wieder deaktivieren. Eine abgeschlossene Öffnung wird automatisch aus dem öffentlichen Feed entfernt.
+- Nicht eingeloggte Gäste sehen auf der Startseite die freigegebenen Live-Ziehungen. Alternativ kann ein individueller Zuschauerlink mit `?watch=<ID>` geteilt werden.
+- Der öffentliche Feed enthält nur Bezeichnung, Set, Verpackungsart, Fortschritt und Hit-Zähler; **niemals E-Mail-Adressen, Profile oder private Öffnungen**.
+- Über Supabase Realtime werden Änderungen an Booster-Fortschritt und Hit-Countern automatisch an Zuschauer übertragen. Zusätzlich erfolgt alle 20 Sekunden ein automatischer Abgleich als Ausfallsicherung.
+- Jedes Display hat 20 Booster. Für gemischte Abschnitte erscheinen die rechnerischen Rest-Hitraten von SAR, Classics und AR neben ihren normalen Werten. Überdurchschnittliche Werte sind grün, unterdurchschnittliche rot. FUR und RGB sind von diesen Quoten getrennt.
+- Eigene Öffnungen und die zugehörigen Statistiken können nach einer ausdrücklichen Löschbestätigung vollständig gelöscht werden.
+
+Hinweis: Die rechnerischen Restquoten sind **keine** Garantie für den nächsten Booster. Die Deaktivierung des öffentlichen Feeds verhindert weitere Zugriffe, kann aber bereits von Zuschauern gespeicherte Informationen nicht zurückholen.
+
 ## Datenmodell
 
 - `app_profiles`: Benutzerrollen und Freigabestatus; Admin ist nur über vertrauenswürdige Datenbankinitialisierung bootstrap-fähig.
