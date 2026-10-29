@@ -45,10 +45,12 @@ export function ExternalStats({version,setSlug,personal}:{version:number;setSlug
    <div><small>RGB · eigene + freigegebene</small><strong>{verifiedRgb}</strong></div>
    <div><small>FUR / RGB · inkl. Vorbehalt</small><strong>{verifiedFur+sums(pending,'fur')} / {verifiedRgb+sums(pending,'rgb')}</strong></div>
   </div>
+  <p className="subtle">Externe SAR/Classics/AR-Hits · freigegeben: {sums(approved,'sar')} / {sums(approved,'classics')} / {sums(approved,'ar')}
+   {pending.length>0?' · unter Vorbehalt: '+sums(pending,'sar')+' / '+sums(pending,'classics')+' / '+sums(pending,'ar'):''}</p>
   {filtered.filter(x=>x.status!=='rejected').length>0&&<div className="tablewrap"><table>
-   <thead><tr><th>Externe Ziehung</th><th>Erfasste Displays</th><th>FUR</th><th>RGB</th><th>Einordnung</th></tr></thead>
+   <thead><tr><th>Externe Ziehung</th><th>Erfasste Displays</th><th>SAR</th><th>Classics</th><th>AR</th><th>FUR</th><th>RGB</th><th>Einordnung</th></tr></thead>
    <tbody>{filtered.filter(x=>x.status!=='rejected').map(x=><tr key={x.id}>
-    <td>{x.label||x.set_slug}</td><td>{x.recorded_displays}</td><td>{x.hits.fur}</td><td>{x.hits.rgb}</td>
+    <td>{x.label||x.set_slug}</td><td>{x.recorded_displays}</td><td>{x.hits.sar}</td><td>{x.hits.classics}</td><td>{x.hits.ar}</td><td>{x.hits.fur}</td><td>{x.hits.rgb}</td>
     <td><span className={'external-status '+(x.status==='pending'?'external-pending':'')}>Extern eingereicht · {x.status==='pending'?'unter Vorbehalt':'freigegeben'}</span></td>
    </tr>)}</tbody>
   </table></div>}
