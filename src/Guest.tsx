@@ -29,7 +29,6 @@ const STORAGE='pokemon-hit-tracker-guest-v1';
 const zero=():HitCounts=>({sar:0,classics:0,ar:0,fur:0,rgb:0});
 const totals=(o:GuestOpening)=>o.kind==='display'?1:o.kind==='case'?o.rule.displays_per_case:o.rule.displays_per_case*o.rule.cases_per_casecase;
 const limit=(o:GuestOpening,c:'sar'|'classics'|'ar',displays:number)=>({sar:o.rule.sar_per_display,classics:o.rule.classics_per_display,ar:o.rule.ar_per_display})[c]*displays;
-const sum=(s:GuestSection[],c:Category)=>s.reduce((n,g)=>n+g.hits[c],0);
 const guestLabel=(o:GuestOpening)=>o.label||units[o.kind];
 const number=(n:number)=>n.toLocaleString('de-DE',{maximumFractionDigits:1});
 
@@ -48,7 +47,7 @@ function RateCards({opening,section}:{opening:GuestOpening;section:GuestSection}
 }
 function GuestTracker(){
  const [rules,setRules]=useState<Rule[]>([]);
- const [setError,setSetError]=useState('');
+ const [setLoadError,setSetLoadError]=useState('');
  const [openings,setOpenings]=useState<GuestOpening[]>(()=>{
   try {const value=JSON.parse(localStorage.getItem(STORAGE)||'[]');return Array.isArray(value)?value:[];}catch{return [];}
  });
@@ -66,7 +65,7 @@ function GuestTracker(){
   let active=true;
   void supabase.from('app_sets').select('slug,title,displays_per_case,cases_per_casecase,sar_per_display,classics_per_display,ar_per_display,active').eq('active',true).then(r=>{
    if(!active)return;
-   if(r.error){setSetError(r.error.message);return;}
+   if(r.error){setSetLoadError(r.error.message);return;}
    const items=r.data as Rule[];
    setRules(items);
    if(items.length)setSetSlug(old=>items.some(x=>x.slug===old)?old:items[0].slug);
@@ -146,7 +145,7 @@ function GuestTracker(){
   {error&&<div className="alert">{error}<button onClick={()=>setError('')} aria-label="Fehler schließen">×</button></div>}
   {!current?<><section className="card stack">
     <h3>Neue eigene Öffnung</h3>
-    {setError&&<p className="alert">Set-Auswahl momentan nicht verfügbar: {setError}</p>}
+    {setLoadError&&<p className="alert">Set-Auswahl momentan nicht verfügbar: {setLoadError}</p>}
     <div className="forms"><label>Pokémon-Set<select value={setSlug} onChange={e=>setSetSlug(e.target.value)}>{rules.map(r=><option value={r.slug} key={r.slug}>{r.title}</option>)}</select></label>
     <label>Verpackung<select value={kind} onChange={e=>setKind(e.target.value as Opening['kind'])}><option value="display">Display · 20 Booster</option><option value="case">Case · 12 Displays</option><option value="case_case">Case-Case · 72 Displays</option></select></label>
     <label>Name (optional)<input value={label} maxLength={120} onChange={e=>setLabel(e.target.value)} placeholder="Meine Eskalation"/></label></div>
